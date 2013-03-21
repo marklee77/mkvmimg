@@ -1,0 +1,10 @@
+disks:
+    - partitions:
+        - size: 256MiB
+          fs: ext2
+          path: ./boot
+          uid:
+          gid:
+          boot: True
+        - size: 1GiB
+      
