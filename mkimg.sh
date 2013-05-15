@@ -11,7 +11,8 @@ parted -s disk.img mklabel msdos
 parted -s --align=none disk.img mkpart primary 0 256M
 
 # make bootable
-echo -e "a\n1\nw\nq" | fdisk disk.img
+#echo -e "a\n1\nw\nq" | fdisk disk.img
+parted -s --align=none disk.img set 1 boot on
 
 # add syslinux mbr
 dd bs=440 conv=notrunc count=1 if=/usr/lib/syslinux/mbr.bin of=disk.img

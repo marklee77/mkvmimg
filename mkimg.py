@@ -1,6 +1,9 @@
 #!/usr/bin/env python
+# FIXME: libparted is ridiculously convoluted for some things, and we need to
+# switch to invoking binaries for a few things anyway...
 import parted
 
+# FIXME: throw exception for invalid units?
 def size_to_bytes(size):
     import re
     r = re.compile("(\d+)([a-zA-Z]*)")
@@ -37,6 +40,8 @@ def main(argv=None):
         # FIXME: add partition table type and gpt support
         # space for partition table
         dsize += 512
+        # below for gpt...
+        #dsize += 67*512
 
         # create empty disk file
         f = open('disk.img', 'w')
@@ -47,17 +52,19 @@ def main(argv=None):
         # create partitions and add file systems as appropriate
         device = parted.Device(path='disk.img')
         disk = parted.freshDisk(device, 'msdos')
-        start = 1
+        startsect = 1
         for partspec in diskspec['partitions']:
-            # parted.sizeToSectors?
-            length = size_to_bytes(partspec['size']) / device.sectorSize
-            geometry = parted.Geometry(device, start=start, length=length)
+            length = size_to_bytes(partspec['size']) // device.sectorSize
+            geometry = parted.Geometry(device, start=startsect, length=length)
+            # FIXME: support for extended partitions?
             partition = parted.Partition(disk=disk, 
                                          type=parted.PARTITION_NORMAL, 
                                          geometry=geometry)
+            if partspec['boot']:
+                partition.setFlag(parted.PARTITION_BOOT)
             constraint = parted.Constraint(minGeom=geometry)
             disk.addPartition(partition=partition, constraint=constraint)
-            start += length
+            startsect += length
 
         disk.commitToDevice()
 
