@@ -8,6 +8,9 @@ VARIANT=minbase
 
 VMHOSTNAME=localhost.localdomain
 
+CLOUDUTILS="yes"
+OUTFORMAT="qcow2"
+
 export DEBIAN_FRONTEND=noninteractive
 
 # FIXME: hack!
@@ -51,21 +54,23 @@ fakeroot ln -s /bin/true root/usr/sbin/invoke-rc.d
 
 # install additional packages
 fakeroot fakechroot chroot root \
-    apt-get -y -q --no-install-recommends install dropbear net-tools
+    apt-get -y -q --no-install-recommends install net-tools openssh-server
 
 # allow services
 fakeroot rm root/usr/sbin/invoke-rc.d
 fakeroot mv invoke-rc.d root/usr/sbin/invoke-rc.d
 
 # ------ BEGIN CLOUD ------
+if [ "${CLOUDUTILS}" = "yes" ]; then
 
-fakeroot fakechroot chroot root apt-get -y -q --no-install-recommends install \
-    cloud-init cloud-utils cloud-initramfs-growroot
+    fakeroot fakechroot chroot root \
+        apt-get -y -q --no-install-recommends install \
+            cloud-init cloud-utils cloud-initramfs-growroot
 
-fakeroot fakechroot chroot root useradd -m -k /etc/skel ubuntu
+    fakeroot fakechroot chroot root useradd -m -k /etc/skel ubuntu
 
-KERNEL_APPEND="console=ttyS0"
-
+    KERNEL_APPEND="console=ttyS0"
+fi
 # ------- END CLOUD --------
 
 # remove packages we really don't need/want
@@ -107,6 +112,8 @@ fakeroot rm -rf \
     root/vmlinuz.old root/initrd.img.old \
     root/tmp/* root/dev/* root/proc/* root/sys/* root/run/*
 
+fakeroot mkdir root/dev/pts
+
 # add bootloader configuration
 fakeroot tee root/boot/syslinux.cfg <<EOF > /dev/null
 PROMPT 0
@@ -116,10 +123,14 @@ DEFAULT linux
 LABEL linux
 LINUX /vmlinuz
 INITRD /initrd.img
-APPEND quiet nosplash ro root=/dev/sda1 ${KERNEL_APPEND}
+APPEND nosplash root=/dev/xda1 ro ${KERNEL_APPEND}
 EOF
 
-# FIXME: can make squashfs at this point and exit...
+# just exit with squashfs...
+if [ "${OUTPUTFORMAT}" = "squashfs" ]; then
+    fakeroot mksquashfs root ${RUNDIR}/${SUITE}-${VARIANT}-${ARCH}.squashfs
+    exit 0
+fi
 
 # create archive in fakeroot environment
 fakeroot tar -C root -czf root.tar.gz . 
@@ -152,5 +163,5 @@ EOF
 # add syslinux to mbr
 dd bs=440 conv=notrunc count=1 if=/usr/lib/syslinux/mbr.bin of=disk.img
 
-# not compressing because we want to try to minimize first...
+# convert to qcow2...
 qemu-img convert -c -O qcow2 disk.img ${RUNDIR}/${SUITE}-${VARIANT}-${ARCH}.qcow2
